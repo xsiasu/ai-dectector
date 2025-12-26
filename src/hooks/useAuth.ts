@@ -23,6 +23,19 @@ export function useAuth(): UseAuthReturn {
 
   const supabase = createClient()
 
+  // Supabase 클라이언트가 없으면 비인증 상태 반환 (빌드 시 정적 페이지 생성용)
+  if (!supabase) {
+    return {
+      user: null,
+      session: null,
+      isLoading: false,
+      isAuthenticated: false,
+      signInWithProvider: async () => {},
+      signOut: async () => {},
+      refresh: async () => {},
+    }
+  }
+
   // 세션 상태 새로고침
   const refresh = useCallback(async () => {
     try {

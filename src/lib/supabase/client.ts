@@ -19,7 +19,8 @@ export function createClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase 환경변수가 설정되지 않았습니다.')
+    // 빌드 시 정적 페이지 생성 단계에서는 환경변수가 없을 수 있음
+    return null
   }
 
   supabaseInstance = createBrowserClient(supabaseUrl, supabaseAnonKey)
