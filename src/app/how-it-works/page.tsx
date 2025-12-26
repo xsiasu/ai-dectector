@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Header, Footer } from "@/components/layout";
 import { LoginModal } from "@/components/LoginModal";
 import { PricingModal } from "@/components/PricingModal";
+import { useUsage } from "@/hooks/useUsage";
 
 const aiTools = [
   "Midjourney",
@@ -130,6 +131,7 @@ const visualAnalysisItems = [
 export default function HowItWorks() {
   const [showLogin, setShowLogin] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
+  const { remainingFreeUsage, paidCredits } = useUsage();
 
   return (
     <div
@@ -572,6 +574,8 @@ export default function HowItWorks() {
       <PricingModal
         isOpen={showPricing}
         onClose={() => setShowPricing(false)}
+        remainingFreeUsage={remainingFreeUsage}
+        paidCredits={paidCredits}
       />
     </div>
   );
