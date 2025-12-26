@@ -57,12 +57,20 @@ export function PricingModal({
         }),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || '결제 요청에 실패했습니다.')
+        // 에러 응답이 JSON이 아닐 수 있으므로 먼저 텍스트로 읽음
+        const errorText = await response.text()
+        let errorMessage = '결제 요청에 실패했습니다.'
+        try {
+          const errorData = JSON.parse(errorText)
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          // JSON 파싱 실패 시 기본 메시지 사용
+        }
+        throw new Error(errorMessage)
       }
 
+      const data = await response.json()
       // Toss 결제 페이지로 리다이렉트
       window.location.href = data.checkoutUrl
     } catch (err) {
