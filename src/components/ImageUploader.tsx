@@ -116,7 +116,7 @@ export function ImageUploader({
     <div className="space-y-2">
       <Card
         className={`
-          relative cursor-pointer border-2 border-dashed p-8 text-center transition-colors
+          relative cursor-pointer border-1 border-dashed p-8 text-center transition-colors
           ${isDragging ? "border-primary bg-primary/5" : "border-gray-300 hover:border-gray-400"}
           ${error ? "border-red-500" : ""}
         `}
@@ -134,7 +134,7 @@ export function ImageUploader({
         />
 
         <div className="flex flex-col items-center gap-4">
-          <div className="rounded-full bg-gray-100 p-4 dark:bg-gray-800">
+          <div className="rounded-full">
             {isDragging ? (
               <Upload className="h-8 w-8 text-primary" />
             ) : (

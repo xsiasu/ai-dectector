@@ -18,6 +18,50 @@ export interface FingerprintResult {
   evidence?: string[];
 }
 
+// Frequency Analysis Types
+export interface GANFingerprint {
+  detected: boolean;
+  confidence: number;
+  evidence: string[];
+}
+
+export interface DiffusionFingerprint {
+  detected: boolean;
+  confidence: number;
+  evidence: string[];
+}
+
+export interface RadialEnergy {
+  isNatural: boolean;
+  confidence: number;
+}
+
+export interface FrequencyAnalysis {
+  analyzed: boolean;
+  ganFingerprint: GANFingerprint;
+  diffusionFingerprint: DiffusionFingerprint;
+  radialEnergy: RadialEnergy;
+  overallConfidence: number;
+}
+
+// Screenshot/Editing Analysis Types (for false positive prevention)
+export interface ScreenshotAnalysis {
+  isScreenshot: boolean;
+  confidence: number;
+  evidence: string[];
+  deviceType?: "mobile" | "tablet" | "desktop" | "unknown";
+}
+
+export interface EditingAnalysis {
+  isEdited: boolean;
+  isAIGenerated: boolean;
+  editingTool?: string;
+  confidence: number;
+  evidence: string[];
+}
+
+export type ContentType = "photograph" | "screenshot" | "edited" | "ai_generated" | "unknown";
+
 // Analysis Result Types
 export interface AnalysisResult {
   isAI: boolean;
@@ -26,7 +70,11 @@ export interface AnalysisResult {
   riskLevel: "low" | "medium" | "high";
   metadata?: ImageMetadata;
   fingerprint?: FingerprintResult;
-  analysisMethod?: "fingerprint" | "visual" | "combined";
+  frequency?: FrequencyAnalysis;
+  screenshot?: ScreenshotAnalysis;
+  editing?: EditingAnalysis;
+  contentType?: ContentType;
+  analysisMethod?: "fingerprint" | "visual" | "combined" | "frequency";
 }
 
 export interface ScrapeResult {
@@ -52,4 +100,8 @@ export interface ImageMetadata {
   };
   hasExif: boolean;
   aiToolHint?: string;
+  editingToolHint?: {
+    name: string;
+    type: "editor" | "screenshot" | "camera";
+  };
 }

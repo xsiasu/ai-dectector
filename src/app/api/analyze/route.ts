@@ -6,8 +6,9 @@ import {
 } from "@/lib/metadata";
 import {
   detectFingerprint,
-  combineAnalysisResults,
+  combineAllAnalysisResults,
 } from "@/lib/fingerprint";
+import { analyzeImageFrequency } from "@/lib/frequency";
 
 // High confidence threshold - skip visual analysis if fingerprint is this confident
 const HIGH_CONFIDENCE_THRESHOLD = 95;
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     // Step 1: Run fingerprint detection FIRST (highest priority)
     const fingerprint = await detectFingerprint(buffer, mimeType);
 
-    // Step 2: If high-confidence fingerprint, skip expensive visual analysis
+    // Step 2: If high-confidence fingerprint, skip expensive visual and frequency analysis
     if (fingerprint?.detected && fingerprint.confidence >= HIGH_CONFIDENCE_THRESHOLD) {
       const metadata = isUrlBased
         ? await extractMetadataFromUrl(body.imageUrl)
@@ -79,8 +80,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 3: Run visual analysis (fingerprint was inconclusive or not found)
-    const [visualResult, metadata] = await Promise.all([
+    // Step 3: Run frequency analysis, visual analysis, and metadata extraction in parallel
+    const [frequencyResult, visualResult, metadata] = await Promise.all([
+      analyzeImageFrequency(buffer, { mimeType }),
       isUrlBased
         ? analyzeImageFromUrl(body.imageUrl)
         : analyzeImage(body.imageBase64, body.mimeType),
@@ -89,10 +91,16 @@ export async function POST(request: NextRequest) {
         : Promise.resolve(extractMetadataFromBase64(body.imageBase64)),
     ]);
 
-    // Step 4: Combine fingerprint and visual analysis results
-    const combinedResult = combineAnalysisResults(fingerprint, visualResult);
+    // Step 4: Combine all analysis methods (fingerprint, frequency, visual)
+    // Pass metadata for screenshot/editing detection penalties
+    const combinedResult = combineAllAnalysisResults(
+      fingerprint,
+      frequencyResult,
+      visualResult,
+      metadata
+    );
 
-    return NextResponse.json({ ...combinedResult, metadata });
+    return NextResponse.json(combinedResult);
   } catch (error) {
     console.error("Analysis error:", error);
 

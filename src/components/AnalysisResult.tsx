@@ -11,9 +11,10 @@ import {
   ShieldCheck,
   Eye,
   Layers,
+  Activity,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { ImageMetadata, FingerprintResult, FingerprintSource } from "@/types";
+import { ImageMetadata, FingerprintResult, FingerprintSource, ContentType } from "@/types";
 
 interface AnalysisResultProps {
   result: {
@@ -23,7 +24,8 @@ interface AnalysisResultProps {
     riskLevel: "low" | "medium" | "high";
     metadata?: ImageMetadata;
     fingerprint?: FingerprintResult;
-    analysisMethod?: "fingerprint" | "visual" | "combined";
+    analysisMethod?: "fingerprint" | "visual" | "combined" | "frequency";
+    contentType?: ContentType;
   };
   imagePreview?: string;
 }
@@ -135,12 +137,47 @@ const analysisMethodConfig = {
     bgColor: "bg-blue-100 dark:bg-blue-900",
     icon: Layers,
   },
+  frequency: {
+    label: "주파수 분석 기반",
+    color: "text-cyan-600 dark:text-cyan-400",
+    bgColor: "bg-cyan-100 dark:bg-cyan-900",
+    icon: Activity,
+  },
+};
+
+// Content type badge configuration
+const contentTypeConfig: Record<ContentType, { label: string; color: string; bgColor: string }> = {
+  photograph: {
+    label: "사진",
+    color: "text-green-600 dark:text-green-400",
+    bgColor: "bg-green-100 dark:bg-green-900",
+  },
+  screenshot: {
+    label: "스크린샷",
+    color: "text-blue-600 dark:text-blue-400",
+    bgColor: "bg-blue-100 dark:bg-blue-900",
+  },
+  edited: {
+    label: "편집된 이미지",
+    color: "text-orange-600 dark:text-orange-400",
+    bgColor: "bg-orange-100 dark:bg-orange-900",
+  },
+  ai_generated: {
+    label: "AI 생성",
+    color: "text-red-600 dark:text-red-400",
+    bgColor: "bg-red-100 dark:bg-red-900",
+  },
+  unknown: {
+    label: "알 수 없음",
+    color: "text-gray-600 dark:text-gray-400",
+    bgColor: "bg-gray-100 dark:bg-gray-800",
+  },
 };
 
 function AnalysisMethodBadge({
   method,
 }: {
-  method: "fingerprint" | "visual" | "combined";
+  method: "fingerprint" | "visual" | "combined" | "frequency";
 }) {
   const config = analysisMethodConfig[method];
   const Icon = config.icon;
@@ -150,6 +187,18 @@ function AnalysisMethodBadge({
       className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}
     >
       <Icon className="h-3 w-3" />
+      {config.label}
+    </span>
+  );
+}
+
+function ContentTypeBadge({ contentType }: { contentType: ContentType }) {
+  const config = contentTypeConfig[contentType];
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}
+    >
       {config.label}
     </span>
   );
@@ -248,11 +297,14 @@ export function AnalysisResult({ result }: AnalysisResultProps) {
                 {config.label}
               </span>
             </p>
-            {result.analysisMethod && (
-              <div className="mt-2">
+            <div className="mt-2 flex flex-wrap gap-2 justify-center md:justify-start">
+              {result.contentType && (
+                <ContentTypeBadge contentType={result.contentType} />
+              )}
+              {result.analysisMethod && (
                 <AnalysisMethodBadge method={result.analysisMethod} />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </Card>
@@ -360,6 +412,22 @@ export function AnalysisResult({ result }: AnalysisResultProps) {
                   </span>
                   <span className="text-red-600 font-semibold">
                     {result.metadata.aiToolHint} 로 생성된 것으로 추정
+                  </span>
+                </div>
+              )}
+
+              {result.metadata.editingToolHint && (
+                <div className="flex flex-col md:col-span-2">
+                  <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    <Info className="h-4 w-4" />
+                    {result.metadata.editingToolHint.type === "screenshot" ? "스크린샷 도구" :
+                     result.metadata.editingToolHint.type === "camera" ? "카메라" : "편집 도구"} 감지
+                  </span>
+                  <span className="text-green-600 dark:text-green-400 font-semibold">
+                    {result.metadata.editingToolHint.name}
+                    {result.metadata.editingToolHint.type === "screenshot" && " (스크린샷)"}
+                    {result.metadata.editingToolHint.type === "camera" && " (실제 촬영)"}
+                    {result.metadata.editingToolHint.type === "editor" && " (편집됨)"}
                   </span>
                 </div>
               )}

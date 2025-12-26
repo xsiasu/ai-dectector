@@ -44,18 +44,20 @@ describe("AnalysisResult", () => {
     expect(screen.getByText("근거 3")).toBeInTheDocument();
   });
 
-  it("renders download button", () => {
+  it("renders evidence section", () => {
     render(<AnalysisResult result={mockResult} />);
 
-    expect(screen.getByText("리포트 다운로드")).toBeInTheDocument();
+    expect(screen.getByText("판별 근거")).toBeInTheDocument();
   });
 
-  it("renders disclaimer text", () => {
-    render(<AnalysisResult result={mockResult} />);
+  it("renders analysis method badge when provided", () => {
+    const resultWithMethod = {
+      ...mockResult,
+      analysisMethod: "visual" as const,
+    };
+    render(<AnalysisResult result={resultWithMethod} />);
 
-    expect(
-      screen.getByText("본 분석 결과는 참고용이며, 법적 증거로 사용될 수 없습니다.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("시각 분석 기반")).toBeInTheDocument();
   });
 
   describe("with metadata", () => {
@@ -143,14 +145,14 @@ describe("AnalysisResult", () => {
 
       render(<AnalysisResult result={resultWithFingerprint} />);
 
-      expect(screen.getByText(/디지털 지문이 감지되었습니다/)).toBeInTheDocument();
+      expect(screen.getByText(/디지털 지문 감지/)).toBeInTheDocument();
       expect(screen.getByText(/C2PA Content Credentials/)).toBeInTheDocument();
     });
 
     it("does not show fingerprint banner when fingerprint is not detected", () => {
       render(<AnalysisResult result={mockResult} />);
 
-      expect(screen.queryByText(/디지털 지문이 감지되었습니다/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/디지털 지문 감지/)).not.toBeInTheDocument();
     });
   });
 });

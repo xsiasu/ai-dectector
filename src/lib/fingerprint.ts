@@ -1,4 +1,11 @@
-import type { FingerprintResult, FingerprintSource, AnalysisResult } from "@/types";
+import type {
+  FingerprintResult,
+  FingerprintSource,
+  AnalysisResult,
+  FrequencyAnalysis,
+  ImageMetadata,
+  ContentType,
+} from "@/types";
 import ExifReader from "exifreader";
 
 // Known AI generation tool patterns
@@ -223,6 +230,7 @@ interface VisualAnalysisResult {
   confidence: number;
   evidence: string[];
   riskLevel: "low" | "medium" | "high";
+  contentType?: ContentType;
 }
 
 /**
@@ -289,5 +297,186 @@ export function combineAnalysisResults(
     ...visualAnalysis,
     fingerprint,
     analysisMethod: "visual",
+  };
+}
+
+/**
+ * Combine all analysis methods: fingerprint, frequency, and visual
+ * Weights: fingerprint 40%, frequency 30%, visual 30%
+ * Applies penalties for detected screenshots or edited images
+ */
+export function combineAllAnalysisResults(
+  fingerprint: FingerprintResult | null,
+  frequency: FrequencyAnalysis | null,
+  visualAnalysis: VisualAnalysisResult,
+  metadata?: ImageMetadata | null
+): AnalysisResult {
+  const evidence: string[] = [];
+
+  // Collect all evidence
+  if (fingerprint?.evidence) {
+    evidence.push(...fingerprint.evidence);
+  }
+  if (frequency?.analyzed) {
+    if (frequency.ganFingerprint.detected) {
+      evidence.push(...frequency.ganFingerprint.evidence);
+    }
+    if (frequency.diffusionFingerprint.detected) {
+      evidence.push(...frequency.diffusionFingerprint.evidence);
+    }
+  }
+  evidence.push(...visualAnalysis.evidence);
+
+  // Determine content type from visual analysis or metadata
+  let contentType: ContentType = visualAnalysis.contentType || "unknown";
+
+  // Calculate screenshot/editing penalties based on metadata
+  let screenshotPenalty = 0;
+  let editingPenalty = 0;
+
+  if (metadata?.editingToolHint) {
+    const toolType = metadata.editingToolHint.type;
+    const toolName = metadata.editingToolHint.name;
+
+    if (toolType === "screenshot") {
+      // Screenshot tool detected → 50% confidence penalty
+      screenshotPenalty = 50;
+      contentType = "screenshot";
+      evidence.push(`스크린샷 도구 감지: ${toolName} → AI 아님 가능성 높음`);
+    } else if (toolType === "camera") {
+      // Camera detected → 40% confidence penalty
+      editingPenalty = 40;
+      contentType = "photograph";
+      evidence.push(`카메라 촬영 감지: ${toolName} → AI 아님 가능성 높음`);
+    } else if (toolType === "editor") {
+      // Editing software detected → 35% confidence penalty
+      editingPenalty = 35;
+      contentType = "edited";
+      evidence.push(`편집 소프트웨어 감지: ${toolName} → 편집된 사진`);
+    }
+  }
+
+  // If visual analysis detected screenshot, apply penalty
+  if (visualAnalysis.contentType === "screenshot" && screenshotPenalty === 0) {
+    screenshotPenalty = 40;
+    contentType = "screenshot";
+    evidence.push("시각 분석으로 스크린샷 감지됨");
+  }
+
+  // If visual analysis detected edited image, apply penalty
+  if (visualAnalysis.contentType === "edited" && editingPenalty === 0) {
+    editingPenalty = 30;
+    contentType = "edited";
+  }
+
+  // High-confidence fingerprint (>= 95%) takes absolute priority (no penalty override)
+  if (fingerprint?.detected && fingerprint.confidence >= 95) {
+    return {
+      isAI: true,
+      confidence: fingerprint.confidence,
+      evidence: [
+        ...evidence,
+        "디지털 지문 감지 - 확정적 AI 지표",
+      ],
+      riskLevel: "high",
+      fingerprint,
+      frequency: frequency || undefined,
+      analysisMethod: "fingerprint",
+      contentType: "ai_generated",
+    };
+  }
+
+  // High-confidence fingerprint (>= 90%) - reduced penalty
+  if (fingerprint?.detected && fingerprint.confidence >= 90) {
+    // Still apply some penalty but reduced
+    const reducedPenalty = Math.max(screenshotPenalty, editingPenalty) * 0.3;
+    const adjustedConfidence = Math.max(0, Math.round(fingerprint.confidence - reducedPenalty));
+
+    return {
+      isAI: adjustedConfidence >= 50,
+      confidence: adjustedConfidence,
+      evidence: [
+        ...evidence,
+        "디지털 지문 감지 - 높은 신뢰도 지표",
+      ],
+      riskLevel: adjustedConfidence >= 80 ? "high" : adjustedConfidence >= 50 ? "medium" : "low",
+      fingerprint,
+      frequency: frequency || undefined,
+      analysisMethod: "fingerprint",
+      contentType: adjustedConfidence >= 50 ? "ai_generated" : contentType,
+    };
+  }
+
+  // Calculate weighted confidence
+  // fingerprint: 40%, frequency: 30%, visual: 30%
+  const fingerprintConf = fingerprint?.detected ? fingerprint.confidence : 0;
+  const frequencyConf = frequency?.analyzed ? frequency.overallConfidence : 0;
+  const visualConf = visualAnalysis.confidence;
+
+  // If no fingerprint, redistribute weights: frequency 40%, visual 60%
+  // If no frequency, redistribute weights: fingerprint 60%, visual 40%
+  let baseConfidence: number;
+
+  if (!fingerprint?.detected && (!frequency?.analyzed || frequencyConf === 0)) {
+    // Only visual analysis
+    baseConfidence = visualConf;
+  } else if (!fingerprint?.detected) {
+    // Frequency + visual (40% / 60%)
+    baseConfidence = Math.round(frequencyConf * 0.4 + visualConf * 0.6);
+  } else if (!frequency?.analyzed || frequencyConf === 0) {
+    // Fingerprint + visual (60% / 40%)
+    baseConfidence = Math.round(fingerprintConf * 0.6 + visualConf * 0.4);
+  } else {
+    // All three methods (40% / 30% / 30%)
+    baseConfidence = Math.round(
+      fingerprintConf * 0.4 + frequencyConf * 0.3 + visualConf * 0.3
+    );
+  }
+
+  // Apply screenshot and editing penalties
+  const totalPenalty = screenshotPenalty + editingPenalty;
+  const combinedConfidence = Math.max(0, Math.round(baseConfidence - totalPenalty));
+
+  // Determine if AI based on final confidence and detections
+  // With penalty applied, use the adjusted confidence
+  const isAI = combinedConfidence >= 50 && (
+    (fingerprint?.detected ?? false) ||
+    (frequency?.ganFingerprint.detected ?? false) ||
+    (frequency?.diffusionFingerprint.detected ?? false) ||
+    visualAnalysis.isAI
+  );
+
+  // Determine risk level based on penalty-adjusted confidence
+  const riskLevel: "low" | "medium" | "high" =
+    combinedConfidence >= 80 ? "high" :
+    combinedConfidence >= 50 ? "medium" : "low";
+
+  // Determine analysis method
+  let analysisMethod: "fingerprint" | "visual" | "combined" | "frequency" = "visual";
+  if (fingerprint?.detected && frequency?.analyzed) {
+    analysisMethod = "combined";
+  } else if (fingerprint?.detected) {
+    analysisMethod = fingerprint.confidence >= 90 ? "fingerprint" : "combined";
+  } else if (frequency?.analyzed && frequencyConf > 0) {
+    analysisMethod = frequencyConf >= 70 ? "frequency" : "combined";
+  }
+
+  // Update content type based on final determination
+  if (isAI && combinedConfidence >= 70) {
+    contentType = "ai_generated";
+  } else if (!isAI && contentType === "unknown") {
+    contentType = "photograph";
+  }
+
+  return {
+    isAI,
+    confidence: combinedConfidence,
+    evidence,
+    riskLevel,
+    fingerprint: fingerprint || undefined,
+    frequency: frequency || undefined,
+    analysisMethod,
+    contentType,
+    metadata: metadata || undefined,
   };
 }

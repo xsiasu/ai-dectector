@@ -5,7 +5,7 @@ import { Loader2, Bot, RefreshCw, X } from "lucide-react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { UrlInput } from "@/components/UrlInput";
 import { AnalysisResult } from "@/components/AnalysisResult";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { Header, Footer } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -135,22 +135,25 @@ export default function Home() {
       }}
     >
       <div className="min-h-screen bg-overlay backdrop-blur-xs">
-        <div className="container mx-auto max-w-3xl px-4 py-12">
-          {/* Header */}
-          <div className="text-center mb-10 relative">
-            <div className="absolute right-0 top-0">
-              <ThemeToggle />
-            </div>
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Bot className="h-10 w-10 text-primary" />
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-                AI Detector
-              </h1>
-            </div>
-            <p className="text-lg">이미지가 AI로 생성되었는지 판별합니다</p>
+        <div className="container mx-auto max-w-3xl px-4 py-4">
+          <Header />
+
+          <div
+            className="mb-4 mx-auto w-40 flex justify-center items-center
+          text-card-foreground rounded-xl border border-glass-border py-2 px-2 shadow-[inset_0_0_30px_var(--glass-shadow)] backdrop-blur-xl
+          "
+          >
+            <Bot className="h-5 w-5 text-primary" />
+            <h1 className="text-xs font-bold text-gray-900 dark:text-white ml-2">
+              AI Detector
+            </h1>
           </div>
 
-          {/* Main Content */}
+          <div className="flex items-center justify-center mb-7">
+            <p className="text-2xl text-primary/90">
+              이미지가 AI로 생성되었는지 판별합니다
+            </p>
+          </div>
           <div className="space-y-6">
             {/* Show result or input sections */}
             {analysisResult ? (
@@ -161,7 +164,8 @@ export default function Home() {
                     <Button
                       variant="destructive"
                       size="icon"
-                      className="absolute right-2 top-2 z-10"
+                      className="absolute right-2 top-2 z-10
+                      "
                       onClick={handleClear}
                     >
                       <X className="h-4 w-4" />
@@ -257,12 +261,7 @@ export default function Home() {
             )}
           </div>
 
-          {/* Footer */}
-          <footer className="mt-16 text-center text-sm text-gray-400">
-            <p>
-              본 서비스는 참고용 분석 도구이며, 법적 증거로 사용될 수 없습니다.
-            </p>
-          </footer>
+          <Footer />
         </div>
       </div>
     </div>
