@@ -139,7 +139,7 @@ export default function HowItWorks() {
       }}
     >
       <div className="min-h-screen bg-overlay backdrop-blur-sm">
-        <div className="container mx-auto max-w-3xl px-4 py-4">
+        <div className="container mx-auto max-w-[600] px-2 md:px-0 py-4">
           <Header
             onLoginClick={() => setShowLogin(true)}
             onPaymentHistoryClick={() => setShowPricing(true)}
@@ -568,7 +568,10 @@ export default function HowItWorks() {
 
       {/* Modals */}
       <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />
-      <PricingModal isOpen={showPricing} onClose={() => setShowPricing(false)} />
+      <PricingModal
+        isOpen={showPricing}
+        onClose={() => setShowPricing(false)}
+      />
     </div>
   );
 }

@@ -38,6 +38,8 @@ export default function Home() {
 
   const {
     remainingCredits,
+    remainingFreeUsage,
+    paidCredits,
     canUse,
     incrementUsage,
     refresh: refreshUsage,
@@ -251,8 +253,8 @@ export default function Home() {
         backgroundImage: `url('https://images.unsplash.com/photo-1677212004257-103cfa6b59d0?auto=format&fit=crop&w=1920&q=80')`,
       }}
     >
-      <div className="min-h-screen bg-overlay backdrop-blur-xs">
-        <div className="container mx-auto max-w-3xl px-4 py-4">
+      <div className="min-h-screen bg-overlay">
+        <div className="container mx-auto max-w-[600] px-2 md:px-0 py-4">
           <Header
             onLoginClick={() => setShowLogin(true)}
             onPaymentHistoryClick={() => setShowPaymentHistory(true)}
@@ -298,8 +300,10 @@ export default function Home() {
           </div>
 
           <div className="flex items-center justify-center mb-7">
-            <p className="text-2xl text-primary/90">
-              이미지가 AI로 생성되었는지 판별합니다
+            <p className="text-4xl font-bold text-primary/90 text-center">
+              <span>
+                이미지가 AI로<br></br> 생성되었는지 판별합니다
+              </span>
             </p>
           </div>
 
@@ -441,6 +445,8 @@ export default function Home() {
           setShowPricing(false);
           refreshUsage();
         }}
+        remainingFreeUsage={remainingFreeUsage}
+        paidCredits={paidCredits}
       />
 
       {/* Login Modal */}

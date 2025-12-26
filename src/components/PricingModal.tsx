@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { CREDIT_PACKAGES, CreditPackage, FREE_USAGE_LIMIT } from '@/types/usage'
-import { useUsage } from '@/hooks/useUsage'
 import { X, CreditCard, Zap, Check, Loader2 } from 'lucide-react'
 import { generateOrderId } from '@/lib/toss'
 
 interface PricingModalProps {
   isOpen: boolean
   onClose: () => void
+  remainingFreeUsage: number
+  paidCredits: number
 }
 
 function formatPrice(price: number): string {
@@ -23,8 +24,12 @@ function getPricePerCredit(pkg: CreditPackage): number {
   return pkg.price / pkg.credits
 }
 
-export function PricingModal({ isOpen, onClose }: PricingModalProps) {
-  const { remainingFreeUsage, paidCredits } = useUsage()
+export function PricingModal({
+  isOpen,
+  onClose,
+  remainingFreeUsage,
+  paidCredits
+}: PricingModalProps) {
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -111,6 +116,10 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
             <span className="text-gray-500 dark:text-gray-400">보유 유료 크레딧</span>
             <span className="font-medium text-gray-900 dark:text-white">{paidCredits}</span>
           </div>
+          <div className="flex justify-between text-sm mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">총 사용 가능 크레딧</span>
+            <span className="font-bold text-blue-600 dark:text-blue-400">{remainingFreeUsage + paidCredits}</span>
+          </div>
         </div>
 
         {/* Error Message */}
@@ -146,11 +155,10 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                   <button
                     key={pkg.credits}
                     onClick={() => setSelectedPackage(pkg)}
-                    className={`relative w-full p-4 rounded-xl border-2 transition-all duration-200 ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                    }`}
+                    className={`relative w-full p-4 rounded-xl border-2 transition-all duration-200 ${isSelected
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
                   >
                     {isPopular && (
                       <span className="absolute -top-2 left-4 px-2 py-0.5 bg-gradient-to-r from-orange-400 to-pink-500 text-white text-xs font-medium rounded-full">
@@ -160,11 +168,10 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            isSelected
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                          }`}
+                          className={`w-10 h-10 rounded-full flex items-center justify-center ${isSelected
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                            }`}
                         >
                           <Zap className="w-5 h-5" />
                         </div>

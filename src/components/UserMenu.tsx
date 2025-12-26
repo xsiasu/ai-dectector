@@ -42,10 +42,9 @@ export function UserMenu({
     return (
       <button
         onClick={onLoginClick}
-        className="flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full text-sm text-gray-700 dark:text-gray-300 hover:bg-white/20 transition-colors"
+        className="flex items-center gap-2 px-1.5 py-1.5 bg-white/10 backdrop-blur-sm rounded-full text-sm text-gray-700 dark:text-gray-300 hover:bg-white/20 transition-colors"
       >
         <LogIn className="w-4 h-4" />
-        로그인
       </button>
     );
   }
