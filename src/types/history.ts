@@ -3,6 +3,7 @@ import { AnalysisResult } from './index'
 export interface HistoryItem {
   id: string
   sessionId: string
+  userId?: string
   createdAt: string
   imageUrl?: string
   imageThumbnail?: string
@@ -27,6 +28,7 @@ export interface HistoryItemInput {
 export interface HistoryDbRow {
   id: string
   session_id: string
+  user_id: string | null
   created_at: string
   image_url: string | null
   image_thumbnail: string | null
@@ -44,6 +46,7 @@ export function dbRowToHistoryItem(row: HistoryDbRow): HistoryItem {
   return {
     id: row.id,
     sessionId: row.session_id,
+    userId: row.user_id || undefined,
     createdAt: row.created_at,
     imageUrl: row.image_url || undefined,
     imageThumbnail: row.image_thumbnail || undefined,
@@ -60,10 +63,12 @@ export function dbRowToHistoryItem(row: HistoryDbRow): HistoryItem {
 
 export function historyItemToDbRow(
   item: HistoryItemInput,
-  sessionId: string
+  sessionId: string,
+  userId?: string
 ): Omit<HistoryDbRow, 'id' | 'created_at'> {
   return {
     session_id: sessionId,
+    user_id: userId || null,
     image_url: item.imageUrl || null,
     image_thumbnail: item.imageThumbnail || null,
     source: item.source,

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
+import { getSessionId } from '@/lib/session'
 
 type Provider = 'google' | 'kakao'
 
@@ -63,12 +64,17 @@ export function useAuth(): UseAuthReturn {
         setUser(currentSession?.user ?? null)
         setIsLoading(false)
 
-        // 로그인 성공 시 사용량 병합 API 호출
+        // 로그인 성공 시 사용량 및 기록 병합 API 호출
         if (event === 'SIGNED_IN' && currentSession?.user) {
           try {
+            // session_id를 헤더에 포함하여 기록 병합도 함께 처리
+            const sessionId = getSessionId()
             await fetch('/api/auth/merge-usage', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(sessionId && { 'x-session-id': sessionId }),
+              },
             })
             // 병합 완료 후 이벤트 발생 (UI 새로고침 트리거)
             window.dispatchEvent(new CustomEvent('auth:usage-merged'))

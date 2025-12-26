@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { HistoryItem, HistoryItemInput } from '@/types/history'
 import {
   saveAnalysis as saveAnalysisLib,
@@ -9,6 +9,7 @@ import {
   deleteHistoryItem as deleteHistoryItemLib,
   clearHistory as clearHistoryLib,
 } from '@/lib/history'
+import { useAuth } from './useAuth'
 
 interface UseHistoryReturn {
   items: HistoryItem[]
@@ -25,6 +26,9 @@ export function useHistory(limit: number = 10): UseHistoryReturn {
   const [items, setItems] = useState<HistoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { isAuthenticated } = useAuth()
+  // 이전 인증 상태 추적 (인증 상태 변경 감지용)
+  const prevAuthRef = useRef(isAuthenticated)
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
@@ -40,9 +44,18 @@ export function useHistory(limit: number = 10): UseHistoryReturn {
     }
   }, [limit])
 
+  // 초기 로드
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // 인증 상태 변경 시 새로고침 (로그인/로그아웃)
+  useEffect(() => {
+    if (prevAuthRef.current !== isAuthenticated) {
+      prevAuthRef.current = isAuthenticated
+      refresh()
+    }
+  }, [isAuthenticated, refresh])
 
   const saveAnalysis = useCallback(async (input: HistoryItemInput): Promise<HistoryItem | null> => {
     try {

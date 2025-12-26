@@ -1,17 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
 import { createHash } from 'crypto'
 import { NextRequest } from 'next/server'
+import { createServiceClient } from '@/lib/supabase/server'
 
 // 상수
 export const FREE_LIMIT = 5
-
-// 서버 사이드 Supabase 클라이언트
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-const supabase = supabaseUrl && supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null
 
 // 환경변수에서 해시 솔트 가져오기
 const HASH_SALT = process.env.USAGE_HASH_SALT || 'ai-detector-default-salt'
@@ -78,19 +70,31 @@ export interface UsageStatus {
   planType: 'free' | 'trial' | 'paid'
 }
 
+// 관리자 클라이언트 가져오기 헬퍼
+function getAdminClient() {
+  try {
+    return createServiceClient()
+  } catch (error) {
+    // Service Role Key가 없으면 null 반환
+    return null
+  }
+}
+
 /**
  * Supabase 설정 여부 확인
+ * 사용량 추적을 위해서는 Service Role Key가 필수
  */
 export function isSupabaseConfigured(): boolean {
-  return supabase !== null
+  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
 }
 
 /**
  * IP 해시에 대한 사용량 레코드 조회 또는 생성
  */
 export async function getOrCreateUsage(ipHash: string): Promise<UsageRecord | null> {
+  const supabase = getAdminClient()
   if (!supabase) {
-    console.warn('Supabase 미설정, 사용량 추적 비활성화')
+    console.warn('Supabase 미설정(Service Key), 사용량 추적 비활성화')
     return null
   }
 
@@ -126,10 +130,48 @@ export async function getOrCreateUsage(ipHash: string): Promise<UsageRecord | nu
 }
 
 /**
- * 사용량 제한 확인 및 상태 반환
+ * user_id 기반 사용량 레코드 조회
  */
-export async function checkUsageLimit(ipHash: string): Promise<UsageStatus> {
-  const record = await getOrCreateUsage(ipHash)
+export async function getUsageByUserId(userId: string): Promise<UsageRecord | null> {
+  const supabase = getAdminClient()
+  if (!supabase) {
+    console.warn('Supabase 미설정(Service Key), 사용량 추적 비활성화')
+    return null
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('usage_log')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+
+  if (existing && !fetchError) {
+    return existing as UsageRecord
+  }
+
+  if (fetchError?.code === 'PGRST116') {
+    // 사용자 레코드가 없음 (아직 병합 안 됨)
+    return null
+  }
+
+  console.error('사용자 사용량 조회 실패:', fetchError)
+  return null
+}
+
+/**
+ * 사용량 제한 확인 및 상태 반환
+ * userId가 있으면 user_id 기반, 없으면 ip_hash 기반
+ */
+export async function checkUsageLimit(ipHash: string, userId?: string): Promise<UsageStatus> {
+  // userId가 있으면 user_id 기반 조회 우선
+  let record: UsageRecord | null = null
+  if (userId) {
+    record = await getUsageByUserId(userId)
+  }
+  // user_id 레코드가 없으면 ip_hash 기반으로 폴백
+  if (!record) {
+    record = await getOrCreateUsage(ipHash)
+  }
 
   // Supabase 미설정 시 기본 폴백
   if (!record) {
@@ -159,19 +201,37 @@ export async function checkUsageLimit(ipHash: string): Promise<UsageStatus> {
 
 /**
  * 분석 성공 후 사용량 증가
+ * userId가 있으면 user_id 기반, 없으면 ip_hash 기반
  */
-export async function incrementUsage(ipHash: string): Promise<boolean> {
+export async function incrementUsage(ipHash: string, userId?: string): Promise<boolean> {
+  const supabase = getAdminClient()
   if (!supabase) {
     console.warn('Supabase 미설정, 사용량 증가 건너뜀')
     return true
   }
 
-  const record = await getOrCreateUsage(ipHash)
+  // userId가 있으면 user_id 기반 조회 우선
+  let record: UsageRecord | null = null
+  let useUserId = false
+  if (userId) {
+    record = await getUsageByUserId(userId)
+    if (record) {
+      useUserId = true
+    }
+  }
+  // user_id 레코드가 없으면 ip_hash 기반으로 폴백
+  if (!record) {
+    record = await getOrCreateUsage(ipHash)
+  }
+
   if (!record) {
     return false
   }
 
   const remainingFree = FREE_LIMIT - record.usage_count
+  const updateFilter = useUserId
+    ? { user_id: userId }
+    : { ip_hash: ipHash }
 
   if (remainingFree > 0) {
     // 무료 크레딧 사용
@@ -181,7 +241,7 @@ export async function incrementUsage(ipHash: string): Promise<boolean> {
         usage_count: record.usage_count + 1,
         last_used_at: new Date().toISOString()
       })
-      .eq('ip_hash', ipHash)
+      .match(updateFilter)
 
     if (error) {
       console.error('사용량 증가 실패:', error)
@@ -196,7 +256,7 @@ export async function incrementUsage(ipHash: string): Promise<boolean> {
         paid_credits: record.paid_credits - 1,
         last_used_at: new Date().toISOString()
       })
-      .eq('ip_hash', ipHash)
+      .match(updateFilter)
 
     if (error) {
       console.error('유료 크레딧 차감 실패:', error)
@@ -209,18 +269,37 @@ export async function incrementUsage(ipHash: string): Promise<boolean> {
 }
 
 /**
- * IP 해시에 유료 크레딧 추가
+ * 유료 크레딧 추가
+ * userId가 있으면 user_id 기반, 없으면 ip_hash 기반
  */
-export async function addPaidCredits(ipHash: string, amount: number): Promise<boolean> {
+export async function addPaidCredits(ipHash: string, amount: number, userId?: string): Promise<boolean> {
+  const supabase = getAdminClient()
   if (!supabase) {
     console.warn('Supabase 미설정, 크레딧 추가 불가')
     return false
   }
 
-  const record = await getOrCreateUsage(ipHash)
+  // userId가 있으면 user_id 기반 조회 우선
+  let record: UsageRecord | null = null
+  let useUserId = false
+  if (userId) {
+    record = await getUsageByUserId(userId)
+    if (record) {
+      useUserId = true
+    }
+  }
+  // user_id 레코드가 없으면 ip_hash 기반으로 폴백
+  if (!record) {
+    record = await getOrCreateUsage(ipHash)
+  }
+
   if (!record) {
     return false
   }
+
+  const updateFilter = useUserId
+    ? { user_id: userId }
+    : { ip_hash: ipHash }
 
   const { error } = await supabase
     .from('usage_log')
@@ -228,7 +307,7 @@ export async function addPaidCredits(ipHash: string, amount: number): Promise<bo
       paid_credits: record.paid_credits + amount,
       plan_type: 'paid'
     })
-    .eq('ip_hash', ipHash)
+    .match(updateFilter)
 
   if (error) {
     console.error('유료 크레딧 추가 실패:', error)

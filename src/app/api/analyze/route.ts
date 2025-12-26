@@ -16,17 +16,30 @@ import {
   incrementUsage,
   isSupabaseConfigured,
 } from "@/lib/server/usage";
+import { createClient } from "@/lib/supabase/server";
 
 // High confidence threshold - skip visual analysis if fingerprint is this confident
 const HIGH_CONFIDENCE_THRESHOLD = 95;
 
 export async function POST(request: NextRequest) {
   try {
+    // 인증된 사용자인지 확인
+    let userId: string | undefined;
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id;
+    } catch {
+      // 인증 실패 시 IP 기반으로 진행
+    }
+
+    const clientIp = getClientIp(request);
+    const ipHash = hashIp(clientIp);
+
     // Server-side usage validation
     if (isSupabaseConfigured()) {
-      const clientIp = getClientIp(request);
-      const ipHash = hashIp(clientIp);
-      const usageStatus = await checkUsageLimit(ipHash);
+      // userId가 있으면 user_id 기반, 없으면 ip_hash 기반 조회
+      const usageStatus = await checkUsageLimit(ipHash, userId);
 
       if (!usageStatus.canUse) {
         return NextResponse.json(
@@ -93,9 +106,7 @@ export async function POST(request: NextRequest) {
 
       // Increment usage after successful analysis
       if (isSupabaseConfigured()) {
-        const clientIp = getClientIp(request);
-        const ipHash = hashIp(clientIp);
-        await incrementUsage(ipHash);
+        await incrementUsage(ipHash, userId);
       }
 
       return NextResponse.json({
@@ -134,9 +145,7 @@ export async function POST(request: NextRequest) {
 
     // Increment usage after successful analysis
     if (isSupabaseConfigured()) {
-      const clientIp = getClientIp(request);
-      const ipHash = hashIp(clientIp);
-      await incrementUsage(ipHash);
+      await incrementUsage(ipHash, userId);
     }
 
     return NextResponse.json(combinedResult);

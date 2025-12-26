@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import { createClient } from './supabase/client'
 import { getSessionId } from './session'
 import {
   HistoryItem,
@@ -9,6 +10,19 @@ import {
 } from '@/types/history'
 
 const TABLE_NAME = 'analysis_history'
+
+// 현재 로그인한 사용자 ID 가져오기
+async function getCurrentUserId(): Promise<string | null> {
+  const supabaseClient = createClient()
+  if (!supabaseClient) return null
+
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser()
+    return user?.id || null
+  } catch {
+    return null
+  }
+}
 
 export async function saveAnalysis(input: HistoryItemInput): Promise<HistoryItem | null> {
   if (!isSupabaseConfigured() || !supabase) {
@@ -22,7 +36,9 @@ export async function saveAnalysis(input: HistoryItemInput): Promise<HistoryItem
     return null
   }
 
-  const dbRow = historyItemToDbRow(input, sessionId)
+  // 로그인 사용자인 경우 userId도 함께 저장
+  const userId = await getCurrentUserId()
+  const dbRow = historyItemToDbRow(input, sessionId, userId || undefined)
 
   const { data, error } = await supabase
     .from(TABLE_NAME)
@@ -43,17 +59,29 @@ export async function getHistory(limit: number = 10): Promise<HistoryItem[]> {
     return []
   }
 
+  const userId = await getCurrentUserId()
   const sessionId = getSessionId()
-  if (!sessionId) {
+
+  // 로그인도 안 되어 있고 세션도 없으면 빈 배열
+  if (!userId && !sessionId) {
     return []
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from(TABLE_NAME)
     .select('*')
-    .eq('session_id', sessionId)
     .order('created_at', { ascending: false })
     .limit(limit)
+
+  // 로그인 사용자: user_id 기반 조회
+  // 비로그인 사용자: session_id 기반 조회
+  if (userId) {
+    query = query.eq('user_id', userId)
+  } else {
+    query = query.eq('session_id', sessionId)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     console.error('Failed to get history:', error)
@@ -68,17 +96,26 @@ export async function getHistoryItem(id: string): Promise<HistoryItem | null> {
     return null
   }
 
+  const userId = await getCurrentUserId()
   const sessionId = getSessionId()
-  if (!sessionId) {
+
+  if (!userId && !sessionId) {
     return null
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from(TABLE_NAME)
     .select('*')
     .eq('id', id)
-    .eq('session_id', sessionId)
-    .single()
+
+  // 로그인 사용자: user_id 기반, 비로그인: session_id 기반
+  if (userId) {
+    query = query.eq('user_id', userId)
+  } else {
+    query = query.eq('session_id', sessionId)
+  }
+
+  const { data, error } = await query.single()
 
   if (error) {
     console.error('Failed to get history item:', error)
@@ -93,16 +130,26 @@ export async function deleteHistoryItem(id: string): Promise<boolean> {
     return false
   }
 
+  const userId = await getCurrentUserId()
   const sessionId = getSessionId()
-  if (!sessionId) {
+
+  if (!userId && !sessionId) {
     return false
   }
 
-  const { error } = await supabase
+  let query = supabase
     .from(TABLE_NAME)
     .delete()
     .eq('id', id)
-    .eq('session_id', sessionId)
+
+  // 로그인 사용자: user_id 기반, 비로그인: session_id 기반
+  if (userId) {
+    query = query.eq('user_id', userId)
+  } else {
+    query = query.eq('session_id', sessionId)
+  }
+
+  const { error } = await query
 
   if (error) {
     console.error('Failed to delete history item:', error)
@@ -117,15 +164,25 @@ export async function clearHistory(): Promise<boolean> {
     return false
   }
 
+  const userId = await getCurrentUserId()
   const sessionId = getSessionId()
-  if (!sessionId) {
+
+  if (!userId && !sessionId) {
     return false
   }
 
-  const { error } = await supabase
+  let query = supabase
     .from(TABLE_NAME)
     .delete()
-    .eq('session_id', sessionId)
+
+  // 로그인 사용자: user_id 기반, 비로그인: session_id 기반
+  if (userId) {
+    query = query.eq('user_id', userId)
+  } else {
+    query = query.eq('session_id', sessionId)
+  }
+
+  const { error } = await query
 
   if (error) {
     console.error('Failed to clear history:', error)
