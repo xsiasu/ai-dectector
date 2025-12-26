@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   Bot,
@@ -27,6 +28,8 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Header, Footer } from "@/components/layout";
+import { LoginModal } from "@/components/LoginModal";
+import { PricingModal } from "@/components/PricingModal";
 
 const aiTools = [
   "Midjourney",
@@ -125,6 +128,9 @@ const visualAnalysisItems = [
 ];
 
 export default function HowItWorks() {
+  const [showLogin, setShowLogin] = useState(false);
+  const [showPricing, setShowPricing] = useState(false);
+
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-fixed"
@@ -134,7 +140,10 @@ export default function HowItWorks() {
     >
       <div className="min-h-screen bg-overlay backdrop-blur-sm">
         <div className="container mx-auto max-w-3xl px-4 py-4">
-          <Header />
+          <Header
+            onLoginClick={() => setShowLogin(true)}
+            onPaymentHistoryClick={() => setShowPricing(true)}
+          />
 
           {/* Page Title */}
           <div className="text-center mb-10">
@@ -556,6 +565,10 @@ export default function HowItWorks() {
           <Footer />
         </div>
       </div>
+
+      {/* Modals */}
+      <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />
+      <PricingModal isOpen={showPricing} onClose={() => setShowPricing(false)} />
     </div>
   );
 }

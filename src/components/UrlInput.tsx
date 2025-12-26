@@ -7,12 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 interface UrlInputProps {
-  onUrlSubmit: (url: string, isDirectImage: boolean) => void;
+  onUrlSubmit: (url: string) => void;
   isLoading?: boolean;
   disabled?: boolean;
 }
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
+
+const KNOWN_IMAGE_HOSTS = [
+  /^i\.imgur\.com/,
+  /^pbs\.twimg\.com/,
+  /^cdn\.discordapp\.com/,
+  /^images\.unsplash\.com/,
+  /^res\.cloudinary\.com/,
+];
 
 function isValidUrl(string: string): boolean {
   try {
@@ -23,9 +31,33 @@ function isValidUrl(string: string): boolean {
   }
 }
 
+function isKnownImageHost(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname;
+    return KNOWN_IMAGE_HOSTS.some((pattern) => pattern.test(hostname));
+  } catch {
+    return false;
+  }
+}
+
 function isDirectImageUrl(url: string): boolean {
-  const pathname = new URL(url).pathname.toLowerCase();
-  return IMAGE_EXTENSIONS.some((ext) => pathname.endsWith(ext));
+  try {
+    const { pathname, hostname } = new URL(url);
+
+    // 1. 확장자 기반 판별
+    if (IMAGE_EXTENSIONS.some((ext) => pathname.toLowerCase().endsWith(ext))) {
+      return true;
+    }
+
+    // 2. 알려진 이미지 호스팅 서비스
+    if (isKnownImageHost(url)) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 export function UrlInput({
@@ -34,28 +66,33 @@ export function UrlInput({
   disabled = false,
 }: UrlInputProps) {
   const [url, setUrl] = useState("");
-  const [urlType, setUrlType] = useState<"none" | "image" | "webpage">("none");
+  const [urlType, setUrlType] = useState<"none" | "image" | "invalid">("none");
   const [error, setError] = useState<string | null>(null);
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setUrl(value);
-    setError(null);
 
     if (!value.trim()) {
       setUrlType("none");
+      setError(null);
       return;
     }
 
     if (!isValidUrl(value)) {
       setUrlType("none");
+      setError(null);
       return;
     }
 
     if (isDirectImageUrl(value)) {
       setUrlType("image");
+      setError(null);
     } else {
-      setUrlType("webpage");
+      setUrlType("invalid");
+      setError(
+        "직접 이미지 URL만 지원됩니다. (예: https://example.com/image.jpg)"
+      );
     }
   };
 
@@ -70,11 +107,15 @@ export function UrlInput({
       return;
     }
 
-    onUrlSubmit(url, urlType === "image");
+    if (urlType !== "image") {
+      return;
+    }
+
+    onUrlSubmit(url);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !disabled && !isLoading) {
+    if (e.key === "Enter" && !disabled && !isLoading && urlType === "image") {
       handleSubmit();
     }
   };
@@ -90,7 +131,7 @@ export function UrlInput({
         <div className="flex gap-2">
           <Input
             type="url"
-            placeholder="https://example.com/image.jpg 또는 웹페이지 URL"
+            placeholder="https://example.com/image.jpg"
             value={url}
             onChange={handleUrlChange}
             onKeyDown={handleKeyDown}
@@ -99,7 +140,7 @@ export function UrlInput({
           />
           <Button
             onClick={handleSubmit}
-            disabled={disabled || isLoading || !url.trim()}
+            disabled={disabled || isLoading || !url.trim() || urlType !== "image"}
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "분석"}
           </Button>
@@ -112,12 +153,10 @@ export function UrlInput({
           </div>
         )}
 
-        {urlType !== "none" && !error && (
+        {urlType === "image" && !error && (
           <div className="flex items-center gap-2 text-sm text-green-600">
             <CheckCircle className="h-4 w-4" />
-            {urlType === "image"
-              ? "이미지 URL 감지됨"
-              : "웹페이지 URL 감지됨 (이미지 자동 추출)"}
+            이미지 URL 감지됨
           </div>
         )}
       </div>

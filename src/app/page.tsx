@@ -1,34 +1,75 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Bot, RefreshCw, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, Bot, RefreshCw, X, Zap, History } from "lucide-react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { UrlInput } from "@/components/UrlInput";
 import { AnalysisResult } from "@/components/AnalysisResult";
+import { HistoryList } from "@/components/HistoryList";
+import { PricingModal } from "@/components/PricingModal";
+import { LoginModal } from "@/components/LoginModal";
+import { UsageWarning } from "@/components/UsageWarning";
+import { PaymentHistory } from "@/components/PaymentHistory";
 import { Header, Footer } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-
-interface AnalysisResultData {
-  isAI: boolean;
-  confidence: number;
-  evidence: string[];
-  riskLevel: "low" | "medium" | "high";
-}
+import { useUsage } from "@/hooks/useUsage";
+import { useHistory } from "@/hooks/useHistory";
+import { useAuth } from "@/hooks/useAuth";
+import { HistoryItem } from "@/types/history";
+import { AnalysisResult as AnalysisResultType } from "@/types/index";
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] =
-    useState<AnalysisResultData | null>(null);
+    useState<AnalysisResultType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPricing, setShowPricing] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [pendingAction, setPendingAction] = useState(false);
+  const [analysisSource, setAnalysisSource] = useState<"upload" | "url">(
+    "upload"
+  );
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+
+  const {
+    remainingCredits,
+    canUse,
+    incrementUsage,
+    refresh: refreshUsage,
+  } = useUsage();
+  const { saveAnalysis, refresh: refreshHistory } = useHistory();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // 로그인 후 결제 모달 자동 표시
+  useEffect(() => {
+    if (pendingAction && isAuthenticated && !authLoading) {
+      setPendingAction(false);
+      setShowPricing(true);
+    }
+  }, [isAuthenticated, authLoading, pendingAction]);
+
+  // 크레딧 소진 시 로그인/결제 모달 핸들링
+  const handleNoCredits = () => {
+    if (!isAuthenticated) {
+      setPendingAction(true);
+      setShowLogin(true);
+    } else {
+      setShowPricing(true);
+    }
+  };
 
   const handleImageSelect = (file: File, preview: string) => {
     setSelectedFile(file);
     setImagePreview(preview);
     setAnalysisResult(null);
     setError(null);
+    setAnalysisSource("upload");
+    setSourceUrl(null);
   };
 
   const handleClear = () => {
@@ -36,41 +77,28 @@ export default function Home() {
     setImagePreview(null);
     setAnalysisResult(null);
     setError(null);
+    setSourceUrl(null);
   };
 
-  const handleUrlSubmit = async (url: string, isDirectImage: boolean) => {
+  const handleUrlSubmit = async (url: string) => {
+    if (!canUse) {
+      handleNoCredits();
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
     setAnalysisResult(null);
+    setAnalysisSource("url");
+    setSourceUrl(url);
 
     try {
-      let imageUrl = url;
+      setImagePreview(url);
 
-      // If it's not a direct image URL, scrape the page first
-      if (!isDirectImage) {
-        const scrapeResponse = await fetch("/api/scrape", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-
-        if (!scrapeResponse.ok) {
-          const errorData = await scrapeResponse.json();
-          throw new Error(errorData.error || "스크래핑에 실패했습니다.");
-        }
-
-        const scrapeResult = await scrapeResponse.json();
-        imageUrl = scrapeResult.imageUrl;
-      }
-
-      // Set preview
-      setImagePreview(imageUrl);
-
-      // Analyze the image
       const analyzeResponse = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl }),
+        body: JSON.stringify({ imageUrl: url }),
       });
 
       if (!analyzeResponse.ok) {
@@ -80,6 +108,16 @@ export default function Home() {
 
       const result = await analyzeResponse.json();
       setAnalysisResult(result);
+
+      // Increment usage and save to history
+      incrementUsage();
+      await saveAnalysis({
+        imageUrl: url,
+        source: "url",
+        sourceUrl: url,
+        result,
+      });
+      refreshUsage();
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");
     } finally {
@@ -90,11 +128,15 @@ export default function Home() {
   const handleAnalyzeUploadedImage = async () => {
     if (!selectedFile || !imagePreview) return;
 
+    if (!canUse) {
+      handleNoCredits();
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
 
     try {
-      // Extract base64 data from preview
       const base64Match = imagePreview.match(/^data:([^;]+);base64,(.+)$/);
       if (!base64Match) {
         throw new Error("이미지 데이터를 처리할 수 없습니다.");
@@ -116,6 +158,18 @@ export default function Home() {
 
       const result = await response.json();
       setAnalysisResult(result);
+
+      // Increment usage and save to history
+      incrementUsage();
+
+      // Create a smaller thumbnail for history
+      const thumbnail = await createThumbnail(imagePreview);
+      await saveAnalysis({
+        imageThumbnail: thumbnail,
+        source: "upload",
+        result,
+      });
+      refreshUsage();
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");
     } finally {
@@ -123,20 +177,101 @@ export default function Home() {
     }
   };
 
+  const createThumbnail = async (base64Image: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxSize = 100;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height *= maxSize / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width *= maxSize / height;
+            height = maxSize;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = () => resolve(base64Image);
+      img.src = base64Image;
+    });
+  };
+
   const handleReset = () => {
     handleClear();
+    refreshHistory();
+  };
+
+  const handleHistoryItemClick = (item: HistoryItem) => {
+    // Reconstruct the result from history item
+    const result: AnalysisResultType = {
+      isAI: item.isAI,
+      confidence: item.confidence,
+      evidence: item.evidence,
+      riskLevel: item.riskLevel,
+      contentType: item.contentType as AnalysisResultType["contentType"],
+      analysisMethod:
+        item.analysisMethod as AnalysisResultType["analysisMethod"],
+    };
+
+    setAnalysisResult(result);
+    setImagePreview(item.imageUrl || item.imageThumbnail || null);
+    setShowHistory(false);
   };
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-fixed"
+      className="invert dark:invert-0 min-h-screen bg-cover bg-center bg-fixed"
       style={{
         backgroundImage: `url('https://images.unsplash.com/photo-1677212004257-103cfa6b59d0?auto=format&fit=crop&w=1920&q=80')`,
       }}
     >
       <div className="min-h-screen bg-overlay backdrop-blur-xs">
         <div className="container mx-auto max-w-3xl px-4 py-4">
-          <Header />
+          <Header
+            onLoginClick={() => setShowLogin(true)}
+            onPaymentHistoryClick={() => setShowPaymentHistory(true)}
+          />
+
+          {/* Usage Status Bar */}
+          <div className="mb-4 flex items-center gap-2 z-[10]">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full text-sm text-gray-700 dark:text-gray-300 hover:bg-white/20 transition-colors"
+            >
+              <History className="w-4 h-4" />
+              기록
+            </button>
+            <button
+              onClick={() => setShowPricing(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full text-sm text-gray-700 dark:text-gray-300 hover:bg-white/20 transition-colors"
+            >
+              <Zap className="w-4 h-4" />
+              {remainingCredits} 크레딧
+            </button>
+          </div>
+
+          {/* Usage Warning (1-2 credits remaining) */}
+          {!analysisResult && (
+            <div className="mb-4">
+              <UsageWarning
+                remainingCredits={remainingCredits}
+                onUpgradeClick={() => setShowPricing(true)}
+              />
+            </div>
+          )}
 
           <div
             className="mb-4 mx-auto w-40 flex justify-center items-center
@@ -154,6 +289,14 @@ export default function Home() {
               이미지가 AI로 생성되었는지 판별합니다
             </p>
           </div>
+
+          {/* History Panel */}
+          {showHistory && (
+            <Card className="mb-6 p-4">
+              <HistoryList onItemClick={handleHistoryItemClick} />
+            </Card>
+          )}
+
           <div className="space-y-6">
             {/* Show result or input sections */}
             {analysisResult ? (
@@ -164,8 +307,7 @@ export default function Home() {
                     <Button
                       variant="destructive"
                       size="icon"
-                      className="absolute right-2 top-2 z-10
-                      "
+                      className="absolute right-2 top-2 z-10"
                       onClick={handleClear}
                     >
                       <X className="h-4 w-4" />
@@ -210,10 +352,24 @@ export default function Home() {
                     onClick={handleAnalyzeUploadedImage}
                     className="w-full"
                     size="lg"
+                    disabled={!canUse}
                   >
                     <Bot className="h-5 w-5 mr-2" />
-                    AI 판별 시작
+                    {canUse ? "AI 판별 시작" : "크레딧 충전 필요"}
                   </Button>
+                )}
+
+                {/* No credits warning */}
+                {imagePreview && !isAnalyzing && !canUse && (
+                  <p className="text-center text-sm text-amber-600 dark:text-amber-400">
+                    크레딧이 부족합니다.{" "}
+                    <button
+                      onClick={() => setShowPricing(true)}
+                      className="underline hover:no-underline"
+                    >
+                      충전하기
+                    </button>
+                  </p>
                 )}
 
                 {/* Loading State */}
@@ -264,6 +420,18 @@ export default function Home() {
           <Footer />
         </div>
       </div>
+
+      {/* Pricing Modal */}
+      <PricingModal
+        isOpen={showPricing}
+        onClose={() => {
+          setShowPricing(false);
+          refreshUsage();
+        }}
+      />
+
+      {/* Login Modal */}
+      <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />
     </div>
   );
 }

@@ -9,12 +9,37 @@ import {
   combineAllAnalysisResults,
 } from "@/lib/fingerprint";
 import { analyzeImageFrequency } from "@/lib/frequency";
+import {
+  getClientIp,
+  hashIp,
+  checkUsageLimit,
+  incrementUsage,
+  isSupabaseConfigured,
+} from "@/lib/server/usage";
 
 // High confidence threshold - skip visual analysis if fingerprint is this confident
 const HIGH_CONFIDENCE_THRESHOLD = 95;
 
 export async function POST(request: NextRequest) {
   try {
+    // Server-side usage validation
+    if (isSupabaseConfigured()) {
+      const clientIp = getClientIp(request);
+      const ipHash = hashIp(clientIp);
+      const usageStatus = await checkUsageLimit(ipHash);
+
+      if (!usageStatus.canUse) {
+        return NextResponse.json(
+          {
+            error: "크레딧이 부족합니다. 충전 후 다시 시도해주세요.",
+            code: "USAGE_LIMIT_EXCEEDED",
+            remainingCredits: 0,
+          },
+          { status: 402 }
+        );
+      }
+    }
+
     const body = await request.json();
 
     // Check if API key is configured
@@ -66,6 +91,13 @@ export async function POST(request: NextRequest) {
         ? await extractMetadataFromUrl(body.imageUrl)
         : extractMetadataFromBase64(body.imageBase64);
 
+      // Increment usage after successful analysis
+      if (isSupabaseConfigured()) {
+        const clientIp = getClientIp(request);
+        const ipHash = hashIp(clientIp);
+        await incrementUsage(ipHash);
+      }
+
       return NextResponse.json({
         isAI: true,
         confidence: fingerprint.confidence,
@@ -99,6 +131,13 @@ export async function POST(request: NextRequest) {
       visualResult,
       metadata
     );
+
+    // Increment usage after successful analysis
+    if (isSupabaseConfigured()) {
+      const clientIp = getClientIp(request);
+      const ipHash = hashIp(clientIp);
+      await incrementUsage(ipHash);
+    }
 
     return NextResponse.json(combinedResult);
   } catch (error) {

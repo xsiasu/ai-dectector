@@ -1,5 +1,13 @@
 Always follow the instructions in plan.md. When I say "go", find the next unmarked test in plan.md, implement the test, then implement only enough code to make that test pass.
 
+# 주석
+
+- 주석은 항상 한국어로 표시할것
+
+# 새로운 기능추가개발시
+
+- 새로운 기능을 추가 개발시에는 shadcn/ui 를 사용하고 사용할수 없을시에는 사용자에게 반드시 feedback을 받는다
+
 # UI DEVELOPMENT RULES
 
 **IMPORTANT**: Before creating any UI, read `DESIGN_SYSTEM.md` in this directory.
