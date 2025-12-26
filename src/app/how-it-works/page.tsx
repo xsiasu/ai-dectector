@@ -138,7 +138,7 @@ export default function HowItWorks() {
         backgroundImage: `url('https://images.unsplash.com/photo-1677212004257-103cfa6b59d0?auto=format&fit=crop&w=1920&q=80')`,
       }}
     >
-      <div className="min-h-screen bg-overlay backdrop-blur-sm">
+      <div className="min-h-screen bg-overlay">
         <div className="container mx-auto max-w-[600] px-2 md:px-0 py-4">
           <Header
             onLoginClick={() => setShowLogin(true)}
@@ -151,7 +151,8 @@ export default function HowItWorks() {
               AI 이미지, 어떻게 판별하나요?
             </h2>
             <p className="">
-              5단계 분석 프로세스로 AI 생성 이미지를 정확하게 탐지합니다
+              5단계 분석 프로세스로<br></br> AI 생성 이미지를 정확하게
+              탐지합니다
             </p>
           </div>
 

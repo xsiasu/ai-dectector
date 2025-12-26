@@ -289,14 +289,12 @@ export default function Home() {
           )}
 
           <div
-            className="mb-4 mx-auto w-40 flex justify-center items-center
+            className="mb-4 mx-auto w-30 flex justify-center items-center
           text-card-foreground rounded-xl border border-glass-border py-2 px-2 shadow-[inset_0_0_30px_var(--glass-shadow)] backdrop-blur-xl
           "
           >
             <Bot className="h-5 w-5 text-primary" />
-            <h1 className="text-xs font-bold text-gray-900 dark:text-white ml-2">
-              AI Detector
-            </h1>
+            <h1 className="text-xs  dark:text-white ml-2">AI Detector</h1>
           </div>
 
           <div className="flex items-center justify-center mb-7">

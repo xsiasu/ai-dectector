@@ -39,14 +39,14 @@ export function Header({ onLoginClick, onPaymentHistoryClick }: HeaderProps) {
         {/* Navigation Menu */}
         <NavigationMenu>
           <NavigationMenuList>
-            <NavigationMenuItem>
+            {/* <NavigationMenuItem>
               <NavigationMenuLink
                 asChild
                 className={navigationMenuTriggerStyle()}
               >
                 <Link href="/">Home</Link>
               </NavigationMenuLink>
-            </NavigationMenuItem>
+            </NavigationMenuItem> */}
             <NavigationMenuItem>
               <NavigationMenuLink
                 asChild
