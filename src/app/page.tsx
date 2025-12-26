@@ -53,6 +53,19 @@ export default function Home() {
     }
   }, [isAuthenticated, authLoading, pendingAction]);
 
+  // 로그인 후 사용량 병합 완료 시 크레딧/기록 새로고침
+  useEffect(() => {
+    const handleUsageMerged = () => {
+      refreshUsage();
+      refreshHistory();
+    };
+
+    window.addEventListener("auth:usage-merged", handleUsageMerged);
+    return () => {
+      window.removeEventListener("auth:usage-merged", handleUsageMerged);
+    };
+  }, [refreshUsage, refreshHistory]);
+
   // 크레딧 소진 시 로그인/결제 모달 핸들링
   const handleNoCredits = () => {
     if (!isAuthenticated) {

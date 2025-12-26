@@ -70,6 +70,8 @@ export function useAuth(): UseAuthReturn {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
             })
+            // 병합 완료 후 이벤트 발생 (UI 새로고침 트리거)
+            window.dispatchEvent(new CustomEvent('auth:usage-merged'))
           } catch (error) {
             console.error('사용량 병합 실패:', error)
           }
