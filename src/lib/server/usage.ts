@@ -50,6 +50,7 @@ export function getClientIp(request: NextRequest): string {
 export interface UsageRecord {
   id: string
   ip_hash: string
+  user_id?: string | null
   usage_count: number
   plan_type: 'free' | 'trial' | 'paid'
   paid_credits: number
@@ -159,18 +160,38 @@ export async function getUsageByUserId(userId: string): Promise<UsageRecord | nu
 }
 
 /**
+ * IP 레코드에 user_id 연결
+ * 로그인 시 IP 레코드와 사용자 계정을 연결
+ */
+async function linkUserToIpRecord(ipHash: string, userId: string): Promise<void> {
+  const supabase = getAdminClient()
+  if (!supabase) return
+
+  await supabase
+    .from('usage_log')
+    .update({ user_id: userId })
+    .eq('ip_hash', ipHash)
+    .is('user_id', null)  // 아직 연결 안 된 경우만
+}
+
+/**
  * 사용량 제한 확인 및 상태 반환
- * userId가 있으면 user_id 기반, 없으면 ip_hash 기반
+ * IP 우선 조회 → 로그인 시 user_id 연결 → 다른 기기면 user_id 폴백
  */
 export async function checkUsageLimit(ipHash: string, userId?: string): Promise<UsageStatus> {
-  // userId가 있으면 user_id 기반 조회 우선
-  let record: UsageRecord | null = null
-  if (userId) {
-    record = await getUsageByUserId(userId)
+  // 1. IP 레코드 먼저 조회 (항상)
+  let record = await getOrCreateUsage(ipHash)
+
+  // 2. 로그인 사용자이고 IP 레코드에 user_id가 없으면 연결
+  if (userId && record && !record.user_id) {
+    await linkUserToIpRecord(ipHash, userId)
+    // 레코드에 user_id 업데이트 반영
+    record = { ...record, user_id: userId }
   }
-  // user_id 레코드가 없으면 ip_hash 기반으로 폴백
-  if (!record) {
-    record = await getOrCreateUsage(ipHash)
+
+  // 3. IP 레코드가 없고 userId가 있으면 user_id 레코드 조회 (다른 기기 로그인)
+  if (!record && userId) {
+    record = await getUsageByUserId(userId)
   }
 
   // Supabase 미설정 시 기본 폴백
@@ -201,7 +222,7 @@ export async function checkUsageLimit(ipHash: string, userId?: string): Promise<
 
 /**
  * 분석 성공 후 사용량 증가
- * userId가 있으면 user_id 기반, 없으면 ip_hash 기반
+ * IP 우선 업데이트 → 다른 기기면 user_id 폴백
  */
 export async function incrementUsage(ipHash: string, userId?: string): Promise<boolean> {
   const supabase = getAdminClient()
@@ -210,18 +231,16 @@ export async function incrementUsage(ipHash: string, userId?: string): Promise<b
     return true
   }
 
-  // userId가 있으면 user_id 기반 조회 우선
-  let record: UsageRecord | null = null
-  let useUserId = false
-  if (userId) {
+  // 1. IP 레코드 먼저 조회 (항상)
+  let record = await getOrCreateUsage(ipHash)
+  let updateFilter: { ip_hash: string } | { user_id: string | undefined } = { ip_hash: ipHash }
+
+  // 2. IP 레코드가 없고 userId가 있으면 user_id 레코드 폴백 (다른 기기 로그인)
+  if (!record && userId) {
     record = await getUsageByUserId(userId)
     if (record) {
-      useUserId = true
+      updateFilter = { user_id: userId }
     }
-  }
-  // user_id 레코드가 없으면 ip_hash 기반으로 폴백
-  if (!record) {
-    record = await getOrCreateUsage(ipHash)
   }
 
   if (!record) {
@@ -229,9 +248,6 @@ export async function incrementUsage(ipHash: string, userId?: string): Promise<b
   }
 
   const remainingFree = FREE_LIMIT - record.usage_count
-  const updateFilter = useUserId
-    ? { user_id: userId }
-    : { ip_hash: ipHash }
 
   if (remainingFree > 0) {
     // 무료 크레딧 사용
@@ -270,7 +286,7 @@ export async function incrementUsage(ipHash: string, userId?: string): Promise<b
 
 /**
  * 유료 크레딧 추가
- * userId가 있으면 user_id 기반, 없으면 ip_hash 기반
+ * IP 우선 업데이트 → 다른 기기면 user_id 폴백
  */
 export async function addPaidCredits(ipHash: string, amount: number, userId?: string): Promise<boolean> {
   const supabase = getAdminClient()
@@ -279,27 +295,21 @@ export async function addPaidCredits(ipHash: string, amount: number, userId?: st
     return false
   }
 
-  // userId가 있으면 user_id 기반 조회 우선
-  let record: UsageRecord | null = null
-  let useUserId = false
-  if (userId) {
+  // 1. IP 레코드 먼저 조회 (항상)
+  let record = await getOrCreateUsage(ipHash)
+  let updateFilter: { ip_hash: string } | { user_id: string | undefined } = { ip_hash: ipHash }
+
+  // 2. IP 레코드가 없고 userId가 있으면 user_id 레코드 폴백 (다른 기기 로그인)
+  if (!record && userId) {
     record = await getUsageByUserId(userId)
     if (record) {
-      useUserId = true
+      updateFilter = { user_id: userId }
     }
-  }
-  // user_id 레코드가 없으면 ip_hash 기반으로 폴백
-  if (!record) {
-    record = await getOrCreateUsage(ipHash)
   }
 
   if (!record) {
     return false
   }
-
-  const updateFilter = useUserId
-    ? { user_id: userId }
-    : { ip_hash: ipHash }
 
   const { error } = await supabase
     .from('usage_log')
