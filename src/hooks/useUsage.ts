@@ -46,10 +46,13 @@ export function useUsage(): UseUsageReturn {
   const refresh = useCallback(async () => {
     try {
       setError(null)
-      // 캐시 무효화: 항상 최신 사용량 데이터 가져오기
-      const response = await fetch('/api/usage', {
+      // 캐시 무효화: 타임스탬프로 Edge 등 모든 브라우저에서 확실히 캐시 방지
+      const response = await fetch(`/api/usage?t=${Date.now()}`, {
         cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' }
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       })
 
       if (!response.ok) {
