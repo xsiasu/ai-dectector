@@ -45,10 +45,13 @@ export async function GET(request: NextRequest) {
     // userId가 있으면 user_id 기반, 없으면 ip_hash 기반
     const status = await checkUsageLimit(ipHash, userId)
 
+    // 캐시 방지: 항상 최신 사용량 반환
     return NextResponse.json({
       ...status,
       configured: true,
       authenticated: !!userId
+    }, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
     })
   } catch (error) {
     console.error('Usage check error:', error)
@@ -109,10 +112,13 @@ export async function POST(request: NextRequest) {
     // Return updated status
     const status = await checkUsageLimit(ipHash, userId)
 
+    // 캐시 방지: 항상 최신 사용량 반환
     return NextResponse.json({
       success: true,
       ...status,
       authenticated: !!userId
+    }, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
     })
   } catch (error) {
     console.error('Add credits error:', error)

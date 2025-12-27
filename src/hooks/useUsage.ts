@@ -46,7 +46,11 @@ export function useUsage(): UseUsageReturn {
   const refresh = useCallback(async () => {
     try {
       setError(null)
-      const response = await fetch('/api/usage')
+      // 캐시 무효화: 항상 최신 사용량 데이터 가져오기
+      const response = await fetch('/api/usage', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      })
 
       if (!response.ok) {
         throw new Error('사용량 조회 실패')
