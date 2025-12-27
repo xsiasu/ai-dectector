@@ -5,7 +5,7 @@ export interface UsageData {
   totalAnalyzed: number
 }
 
-export const FREE_USAGE_LIMIT = 5
+export const FREE_USAGE_LIMIT = 3
 
 export const CREDIT_PACKAGES = [
   { credits: 10, price: 1000, label: '10회권' },

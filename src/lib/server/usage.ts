@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 // 상수
-export const FREE_LIMIT = 5
+export const FREE_LIMIT = 3
 
 // 환경변수에서 해시 솔트 가져오기
 const HASH_SALT = process.env.USAGE_HASH_SALT || 'ai-detector-default-salt'
